@@ -167,12 +167,14 @@ export default {
 
 .title {
   font-size: 1.6rem;
+  font-weight: 700;
   margin-bottom: 0.5rem;
-  color: #222;
+  color: var(--prep-text);
+  font-family: var(--prep-font-display);
 }
 
 .subtitle {
-  color: #666;
+  color: var(--prep-muted);
   font-size: 0.95rem;
 }
 
@@ -193,34 +195,43 @@ export default {
 .field label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #444;
+  color: var(--prep-text);
 }
 
 .field input {
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--prep-border);
   font-size: 0.95rem;
+  background: var(--prep-bg);
+  color: var(--prep-text);
+  font-family: var(--prep-font-body);
+}
+
+.field input::placeholder {
+  color: var(--prep-muted);
 }
 
 .btn-primary {
   padding: 0.65rem 1.2rem;
-  background: #2d8a5e;
-  color: white;
+  background: var(--prep-primary);
+  color: var(--prep-bg);
   border: none;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
+  font-family: var(--prep-font-body);
 }
 
 .btn-primary:hover {
-  background: #247a50;
+  background: var(--prep-primary-hover);
 }
 
 .list-section {
   border-radius: 12px;
-  background: #f8f9fa;
+  background: var(--prep-card);
+  border: 1px solid var(--prep-border);
   padding: 1.25rem;
 }
 
@@ -251,8 +262,11 @@ export default {
 .item-qty-input {
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
-  border: 1px solid #cfd4da;
+  border: 1px solid var(--prep-border);
   font-size: 0.9rem;
+  background: var(--prep-bg);
+  color: var(--prep-text);
+  font-family: var(--prep-font-body);
 }
 
 .item-menu {
@@ -261,25 +275,29 @@ export default {
 
 .btn-menu {
   padding: 0.3rem 0.6rem;
-  background: #e1e7eb;
-  border-radius: 999px;
+  background: var(--prep-border);
+  border-radius: 8px;
   border: none;
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
+  color: var(--prep-text);
+  font-family: var(--prep-font-body);
 }
 
 .btn-menu:hover {
-  background: #cfd7de;
+  background: var(--prep-primary);
+  color: var(--prep-bg);
 }
 
 .menu-dropdown {
   position: absolute;
   right: 0;
   top: 120%;
-  background: #ffffff;
+  background: var(--prep-card);
+  border: 1px solid var(--prep-border);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   padding: 0.25rem 0;
   min-width: 150px;
   z-index: 5;
@@ -294,18 +312,20 @@ export default {
   text-align: left;
   font-size: 0.85rem;
   cursor: pointer;
+  color: var(--prep-text);
+  font-family: var(--prep-font-body);
 }
 
 .menu-item:hover {
-  background: #f3f4f6;
+  background: rgba(0, 200, 180, 0.08);
 }
 
 .menu-item.delete {
-  color: #c62828;
+  color: var(--prep-error);
 }
 
 .empty-state {
-  color: #666;
+  color: var(--prep-muted);
   font-size: 0.95rem;
 }
 

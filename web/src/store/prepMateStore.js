@@ -1,124 +1,85 @@
-import { reactive, readonly, watch } from 'vue'
+import { reactive, computed } from 'vue'
+import { fetchAllRecipes, deleteRecipe } from '@/services/api'
 
-const STORAGE_KEY = 'prepMateStore'
+const state = reactive({
+  savedRecipes: [],
+  loading: false,
+  error: null,
+  groceryItems: [],
+  nextGroceryId: 1,
+})
 
-function loadInitialState() {
-  if (typeof window === 'undefined') {
-    return {
-      savedRecipes: [],
-      groceryItems: [],
-      nextIds: {
-        recipe: 1,
-        groceryItem: 1
-      }
-    }
-  }
-
+// ─────────────────────────────────────────────
+// RECIPES
+// ─────────────────────────────────────────────
+async function initialize() {
+  state.loading = true
+  state.error = null
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return {
-        savedRecipes: [],
-        groceryItems: [],
-        nextIds: {
-          recipe: 1,
-          groceryItem: 1
-        }
-      }
-    }
-    const parsed = JSON.parse(raw)
-    return {
-      savedRecipes: parsed.savedRecipes || [],
-      groceryItems: parsed.groceryItems || [],
-      nextIds: parsed.nextIds || {
-        recipe: 1,
-        groceryItem: 1
-      }
-    }
-  } catch {
-    return {
-      savedRecipes: [],
-      groceryItems: [],
-      nextIds: {
-        recipe: 1,
-        groceryItem: 1
-      }
-    }
+    state.savedRecipes = await fetchAllRecipes()
+  } catch (error) {
+    state.error = error.message
+    console.error('Failed to load recipes:', error)
+  } finally {
+    state.loading = false
   }
 }
 
-const state = reactive(loadInitialState())
-
-function persist() {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      savedRecipes: state.savedRecipes,
-      groceryItems: state.groceryItems,
-      nextIds: state.nextIds
-    })
-  )
+async function refreshRecipes() {
+  try {
+    state.savedRecipes = await fetchAllRecipes()
+  } catch (error) {
+    state.error = error.message
+    console.error('Failed to refresh recipes:', error)
+  }
 }
 
-// Persist whenever state changes
-watch(
-  () => state,
-  () => persist(),
-  { deep: true }
-)
-
-function addSavedRecipe({ text }) {
-  if (!text) return
-  const id = state.nextIds.recipe++
-  state.savedRecipes.unshift({
-    id,
-    text,
-    createdAt: new Date().toISOString()
-  })
+function addRecipeToState(recipe) {
+  state.savedRecipes.unshift(recipe)
 }
 
-function removeSavedRecipe(id) {
-  state.savedRecipes = state.savedRecipes.filter((r) => r.id !== id)
+async function removeSavedRecipe(id) {
+  const backup = [...state.savedRecipes]
+  state.savedRecipes = state.savedRecipes.filter(r => r.id !== id)
+  try {
+    await deleteRecipe(id)
+  } catch (error) {
+    state.savedRecipes = backup
+    state.error = error.message
+    throw error
+  }
 }
 
-function clearSavedRecipes() {
-  state.savedRecipes = []
-}
-
+// ─────────────────────────────────────────────
+// GROCERY LIST (local only, no backend yet)
+// ─────────────────────────────────────────────
 function addGroceryItem({ name, quantity }) {
-  if (!name) return
-  const id = state.nextIds.groceryItem++
   state.groceryItems.push({
-    id,
+    id: state.nextGroceryId++,
     name,
-    quantity: quantity || ''
+    quantity,
   })
-}
-
-function updateGroceryItem(id, patch) {
-  const item = state.groceryItems.find((i) => i.id === id)
-  if (!item) return
-  Object.assign(item, patch)
 }
 
 function deleteGroceryItem(id) {
-  state.groceryItems = state.groceryItems.filter((i) => i.id !== id)
+  state.groceryItems = state.groceryItems.filter(item => item.id !== id)
 }
 
+// ─────────────────────────────────────────────
+// EXPORTS
+// ─────────────────────────────────────────────
 export function usePrepMateStore() {
   return {
-    state: readonly(state),
-    // Saved recipes
-    savedRecipes: state.savedRecipes,
-    addSavedRecipe,
+    savedRecipes: computed(() => state.savedRecipes),
+    loading: computed(() => state.loading),
+    error: computed(() => state.error),
+    groceryItems: computed(() => state.groceryItems),
+
+    initialize,
+    refreshRecipes,
+    addRecipeToState,
     removeSavedRecipe,
-    clearSavedRecipes,
-    // Grocery items
-    groceryItems: state.groceryItems,
     addGroceryItem,
-    updateGroceryItem,
-    deleteGroceryItem
+    deleteGroceryItem,
   }
 }
-

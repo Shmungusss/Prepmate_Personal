@@ -1,5 +1,5 @@
 import settings
-
+import requests
 
 async def call_llm(client, system_prompt, user_prompt, structured_output):
     # Call OpenAI API

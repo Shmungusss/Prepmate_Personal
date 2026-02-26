@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '@/views/Home.vue'
-import RecipeGenerator from '@/views/RecipeGenerator.vue'
-import SavedRecipes from '@/views/SavedRecipes.vue'
+import Recipes from '@/views/Recipes.vue'
 import GroceryList from '@/views/GroceryList.vue'
+import { useAuthStore } from '@/store/authStore'
 
 const routes = [
   {
@@ -11,14 +11,9 @@ const routes = [
     component: Home
   },
   {
-    path: '/recipe-generator',
-    name: 'RecipeGenerator',
-    component: RecipeGenerator
-  },
-  {
-    path: '/saved-recipes',
-    name: 'SavedRecipes',
-    component: SavedRecipes
+    path: '/recipes',
+    name: 'Recipes',
+    component: Recipes
   },
   {
     path: '/grocery-list',
@@ -30,6 +25,16 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to, _from, next) => {
+  const authStore = useAuthStore()
+  const isAuthenticated = authStore.isAuthenticated()
+  if (to.name !== 'Home' && !isAuthenticated) {
+    next({ name: 'Home' })
+  } else {
+    next()
+  }
 })
 
 export default router

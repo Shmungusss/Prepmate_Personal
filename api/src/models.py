@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+import json
+
 
 
 # Recipe Model for structured output
@@ -12,7 +14,6 @@ class DifficultyLevel(str, Enum):
     HARD = "hard"
 
 class CuisineType(str, Enum):
-    """Types of cuisine"""
     AMERICAN = "american"
     ITALIAN = "italian"
     MEXICAN = "mexican"
@@ -24,6 +25,12 @@ class CuisineType(str, Enum):
     MEDITERRANEAN = "mediterranean"
     GREEK = "greek"
     MIDDLE_EASTERN = "middle_eastern"
+    SPANISH = "spanish"
+    RUSSIAN = "russian"
+    KOREAN = "korean"
+    ETHIOPIAN = "ethiopian"
+    PERUVIAN = "peruvian"
+    MOROCCAN = "moroccan"
     OTHER = "other"
 
 class MealType(str, Enum):
@@ -108,3 +115,59 @@ class GroceryList(BaseModel):
     dietary_preferences: Optional[List[str]] = Field(None, description="Dietary preferences this list accommodates (e.g., vegetarian, gluten-free)")
     serves: Optional[int] = Field(None, description="Number of people this grocery list serves", gt=0)
     notes: Optional[str] = Field(None, description="General notes about the grocery list")
+
+
+
+# These save models our for the /recipes endpoint
+class saveIngredient(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    name: str
+    quantity: float
+    unit: str
+    notes: Optional[str] = None
+    optional: bool = False
+
+class saveRecipeStep(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    step_number: int
+    instruction: str
+
+class saveRecipe(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: Optional[int] = None
+    title: str
+    description: str
+    cuisine: CuisineType
+    meal_type: MealType
+    difficulty: DifficultyLevel
+    prep_time_minutes: int
+    cook_time_minutes: int
+    total_time_minutes: int
+    servings: int
+    ingredients: List[Ingredient] = []
+    instructions: List[RecipeStep] = []
+    dietary_tags: Optional[List[str]] = None
+    tips: Optional[List[str]] = None
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    @field_validator('cuisine', 'difficulty', 'meal_type', mode='before')
+    @classmethod
+    def normalize_enums(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
+    @field_validator('dietary_tags', 'tips', mode='before')
+    @classmethod
+    def parse_json_strings(cls, v):
+        # DB stores these as JSON strings, parse them back to lists
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return v

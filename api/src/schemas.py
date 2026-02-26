@@ -11,8 +11,17 @@ class GroceryListRequest(BaseModel):
     goals: Optional[list[str]] = None
 
 
-class SingleRecipeRequest(BaseModel):
+class RecipeFromIngredients(BaseModel):
     ingredients: str
     dietary_restrictions: Optional[list[str]] = None
     servings: Optional[int] = None
     cuisine: Optional[str]= None
+
+class RecipeFromName(BaseModel):
+    recipe: str
+    dietary_restrictions: Optional[list[str]] = None
+    servings: Optional[int] = None
+
+class RecipeFromText(BaseModel):
+    text: str
+
