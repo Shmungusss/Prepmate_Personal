@@ -50,8 +50,14 @@
                   :key="idx"
                   class="ingredient-item"
                 >
-                  <input type="checkbox" :id="`ing-${idx}`" class="ingredient-checkbox" />
-                  <label :for="`ing-${idx}`" class="ingredient-label">
+                  <input
+                    type="checkbox"
+                    :id="`${idPrefix}-ing-${idx}`"
+                    class="ingredient-checkbox"
+                    :checked="isIngredientChecked(idx)"
+                    @change="toggleIngredientChecked(idx)"
+                  />
+                  <label :for="`${idPrefix}-ing-${idx}`" class="ingredient-label">
                     <span class="ingredient-qty">
                       {{ formatQuantity(ingredient.quantity) }} {{ ingredient.unit }}
                     </span>
@@ -73,8 +79,12 @@
                   :key="step.step_number"
                   class="step-item"
                 >
-                  <input type="checkbox" :id="`step-${step.step_number}`" class="step-checkbox" />
-                  <label :for="`step-${step.step_number}`" class="step-label">
+                  <input
+                    type="checkbox"
+                    :id="`${idPrefix}-step-${step.step_number}`"
+                    class="step-checkbox"
+                  />
+                  <label :for="`${idPrefix}-step-${step.step_number}`" class="step-label">
                     <span class="step-number">{{ step.step_number }}</span>
                     <span class="step-text">{{ step.instruction }}</span>
                   </label>
@@ -96,20 +106,49 @@
         </div>
       </div>
   
-      <!-- Action buttons (hidden when viewing saved recipe) -->
-      <div v-if="!hideActions" class="recipe-actions">
-        <button class="action-btn action-btn--secondary" @click="$emit('close')">
+      <!-- Action buttons -->
+      <div v-if="!hideActions || showAddToGrocery || showMadeThis || showSaveToCollection" class="recipe-actions">
+        <button
+          v-if="!hideActions"
+          class="action-btn action-btn--secondary"
+          @click="$emit('close')"
+        >
           ← Generate Another
         </button>
-        <button class="action-btn action-btn--primary" @click="$emit('save')">
+        <button
+          v-if="!hideActions"
+          class="action-btn action-btn--primary"
+          @click="$emit('save')"
+        >
           💾 Save Recipe
+        </button>
+        <button
+          v-if="showAddToGrocery"
+          class="action-btn action-btn--primary"
+          @click="emitAddUncheckedToGrocery"
+        >
+          Add unchecked to Grocery
+        </button>
+        <button
+          v-if="showMadeThis"
+          class="action-btn action-btn--cook"
+          @click="$emit('made-this')"
+        >
+          🍳 I made this
+        </button>
+        <button
+          v-if="showSaveToCollection"
+          class="action-btn action-btn--primary"
+          @click="$emit('save-to-collection')"
+        >
+          💾 Save to My Recipes
         </button>
       </div>
     </div>
   </template>
   
   <script>
-  import { ref } from 'vue'
+  import { ref, watch } from 'vue'
   
   export default {
     name: 'RecipeDisplay',
@@ -123,18 +162,60 @@
         type: Boolean,
         default: false,
       },
+      showAddToGrocery: {
+        type: Boolean,
+        default: false,
+      },
+      showMadeThis: {
+        type: Boolean,
+        default: false,
+      },
+      showSaveToCollection: {
+        type: Boolean,
+        default: false,
+      },
+      idPrefix: {
+        type: String,
+        default: 'recipe',
+      },
     },
+
+    emits: ['close', 'save', 'add-to-grocery', 'made-this', 'save-to-collection'],
   
-    emits: ['close', 'save'],
-  
-    setup() {
+    setup(props, { emit }) {
       const activeTab = ref('ingredients')
+      const checkedIngredientIdxs = ref(new Set())
   
       const tabs = [
         { id: 'ingredients', label: 'Ingredients' },
         { id: 'steps', label: 'Steps' },
         { id: 'tips', label: 'Tips' },
       ]
+
+      watch(
+        () => props.recipe,
+        () => {
+          checkedIngredientIdxs.value = new Set()
+          activeTab.value = 'ingredients'
+        }
+      )
+
+      function isIngredientChecked(idx) {
+        return checkedIngredientIdxs.value.has(idx)
+      }
+
+      function toggleIngredientChecked(idx) {
+        const next = new Set(checkedIngredientIdxs.value)
+        if (next.has(idx)) next.delete(idx)
+        else next.add(idx)
+        checkedIngredientIdxs.value = next
+      }
+
+      function emitAddUncheckedToGrocery() {
+        const ingredients = props.recipe?.ingredients || []
+        const unchecked = ingredients.filter((_, idx) => !checkedIngredientIdxs.value.has(idx))
+        emit('add-to-grocery', unchecked)
+      }
   
       function formatQuantity(qty) {
         // Handle fractions nicely
@@ -155,6 +236,9 @@
   
       return {
         activeTab,
+        isIngredientChecked,
+        toggleIngredientChecked,
+        emitAddUncheckedToGrocery,
         tabs,
         formatQuantity,
         formatCuisine,
@@ -491,6 +575,16 @@
   
   .action-btn--secondary:hover {
     background: rgba(0, 200, 180, 0.12);
+  }
+
+  .action-btn--cook {
+    background: rgba(255, 180, 0, 0.15);
+    color: #f5a623;
+    border: 2px solid rgba(255, 180, 0, 0.4);
+  }
+
+  .action-btn--cook:hover {
+    background: rgba(255, 180, 0, 0.25);
   }
   
   /* ── Transitions ──────────────────────────── */

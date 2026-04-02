@@ -9,6 +9,12 @@
         <router-link :to="{ name: 'Recipes' }" active-class="active">
           Recipes
         </router-link>
+        <router-link :to="{ name: 'Pantry' }" active-class="active">
+          Pantry
+        </router-link>
+        <router-link :to="{ name: 'MealPlan' }" active-class="active">
+          Meal Plan
+        </router-link>
         <router-link :to="{ name: 'GroceryList' }" active-class="active">
           Grocery List
         </router-link>

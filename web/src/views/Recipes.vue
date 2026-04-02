@@ -79,14 +79,117 @@
 
             <!-- By Ingredients -->
             <template v-if="aiMode === 'ingredients'">
-              <div class="form-group">
-                <label for="ingredients">Ingredients</label>
-                <textarea
-                  id="ingredients"
-                  v-model="ingredients"
-                  placeholder="chicken, rice, garlic, onions, pasta ..."
-                  rows="3"
-                />
+              <!-- Pantry selector -->
+              <div class="form-group pantry-group" v-if="pantryItems.length">
+                <div class="pantry-header" @click="pantryExpanded = !pantryExpanded">
+                  <span class="pantry-header-label">Use from Pantry <span class="pantry-count">({{ pantryItems.length }} items)</span></span>
+                  <span class="pantry-chevron" :class="{ open: pantryExpanded }">&#9662;</span>
+                </div>
+                <Transition name="expand">
+                  <div v-if="pantryExpanded" class="pantry-picker">
+                    <div class="pantry-picker-controls">
+                      <button type="button" class="pantry-ctrl-btn" @click="selectAllPantry">Use all</button>
+                      <button type="button" class="pantry-ctrl-btn" @click="clearPantrySelection">Clear</button>
+                    </div>
+                    <div class="pantry-item-grid">
+                      <label
+                        v-for="item in pantryItems"
+                        :key="item.id"
+                        class="pantry-item-check"
+                        :class="{ selected: selectedPantryIds.has(item.id) }"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="selectedPantryIds.has(item.id)"
+                          @change="togglePantryItem(item.id)"
+                        />
+                        <span class="pantry-item-name">{{ item.name }}</span>
+                        <span v-if="item.quantity" class="pantry-item-qty">{{ item.quantity }}{{ item.unit ? ' ' + item.unit : '' }}</span>
+                        <span v-if="item.location" class="pantry-item-loc">{{ item.location }}</span>
+                      </label>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+
+              <div class="form-group ing-builder">
+                <label>Ingredients</label>
+                <div class="ing-add-row">
+                  <input
+                    v-model="ingName"
+                    type="text"
+                    class="ing-input ing-input--name"
+                    placeholder="Ingredient name"
+                    autocomplete="off"
+                    @keydown.enter.prevent="onAddIngredient"
+                  />
+                  <input v-model="ingQty" type="number" min="0" step="any" class="ing-input ing-input--qty" placeholder="Qty" @keydown="(e) => ['e','E','+','-'].includes(e.key) && e.preventDefault()" />
+                  <select v-model="ingUnit" class="ing-input ing-input--unit">
+                    <option value="">Unit</option>
+                    <optgroup label="Volume">
+                      <option value="tsp">tsp</option>
+                      <option value="tbsp">tbsp</option>
+                      <option value="fl oz">fl oz</option>
+                      <option value="cup">cup</option>
+                      <option value="cups">cups</option>
+                      <option value="pint">pint</option>
+                      <option value="quart">quart</option>
+                      <option value="gallon">gallon</option>
+                      <option value="ml">ml</option>
+                      <option value="L">L</option>
+                    </optgroup>
+                    <optgroup label="Weight">
+                      <option value="oz">oz</option>
+                      <option value="lbs">lbs</option>
+                      <option value="g">g</option>
+                      <option value="kg">kg</option>
+                    </optgroup>
+                    <optgroup label="Count">
+                      <option value="count">count</option>
+                      <option value="piece">piece</option>
+                      <option value="pieces">pieces</option>
+                      <option value="slice">slice</option>
+                      <option value="slices">slices</option>
+                      <option value="clove">clove</option>
+                      <option value="cloves">cloves</option>
+                      <option value="bunch">bunch</option>
+                      <option value="head">head</option>
+                      <option value="can">can</option>
+                      <option value="package">package</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                      <option value="pinch">pinch</option>
+                      <option value="dash">dash</option>
+                      <option value="to taste">to taste</option>
+                    </optgroup>
+                  </select>
+                  <input v-model="ingBrand" type="text" class="ing-input ing-input--brand" placeholder="Brand" />
+                  <select v-model="ingLocation" class="ing-input ing-input--loc">
+                    <option value="">Location</option>
+                    <option value="fridge">Fridge</option>
+                    <option value="freezer">Freezer</option>
+                    <option value="pantry">Pantry</option>
+                    <option value="spices">Spices</option>
+                  </select>
+                  <button type="button" class="ing-add-btn" :disabled="!ingName.trim()" @click="onAddIngredient">Add</button>
+                </div>
+                <TransitionGroup v-if="manualIngredients.length" name="ing-item" tag="ul" class="ing-list">
+                  <li v-for="ing in manualIngredients" :key="ing._id" class="ing-chip">
+                    <span class="ing-chip-text">
+                      <span v-if="ing.quantity" class="ing-chip-qty">{{ ing.quantity }}{{ ing.unit ? ' ' + ing.unit : '' }}</span>
+                      {{ ing.name }}
+                      <span v-if="ing.brand" class="ing-chip-brand">· {{ ing.brand }}</span>
+                      <span v-if="ing.location" class="ing-chip-loc">{{ ing.location }}</span>
+                    </span>
+                    <button type="button" class="ing-chip-remove" @click="removeIngredient(ing._id)">&times;</button>
+                  </li>
+                </TransitionGroup>
+                <p v-if="!manualIngredients.length && !selectedPantryIds.size" class="ing-empty-hint">
+                  Add ingredients above or select from your pantry.
+                </p>
+                <p v-else-if="selectedPantryIds.size" class="pantry-note">
+                  + {{ selectedPantryIds.size }} pantry item{{ selectedPantryIds.size === 1 ? '' : 's' }} selected
+                </p>
               </div>
             </template>
 
@@ -141,6 +244,22 @@
                 type="text"
                 placeholder="vegetarian, gluten-free, low-carb"
               />
+            </div>
+
+            <div class="form-group">
+              <label>Cooking Skill Level</label>
+              <div class="skill-options">
+                <label
+                  v-for="opt in skillOptions"
+                  :key="opt.value"
+                  :class="['skill-card', { selected: cookingSkill === opt.value }]"
+                >
+                  <input type="radio" :value="opt.value" v-model="cookingSkill" class="skill-radio" />
+                  <span class="skill-icon">{{ opt.icon }}</span>
+                  <span class="skill-title">{{ opt.label }}</span>
+                  <span class="skill-desc">{{ opt.desc }}</span>
+                </label>
+              </div>
             </div>
 
             <AiLoader v-if="generating" :active="generating" type="recipe" />
@@ -276,17 +395,34 @@
 
           <template v-if="expandedRecipes.has(recipe.id)">
             <div class="recipe-display-wrap">
-              <RecipeDisplay :recipe="recipe" :hide-actions="true" />
-            </div>
-            <div class="recipe-actions">
-              <button type="button" class="btn-secondary" @click="onAddToGroceryPlaceholder">
-                Add to Grocery (coming soon)
-              </button>
+              <RecipeDisplay
+                :recipe="recipe"
+                :hide-actions="true"
+                :show-add-to-grocery="true"
+                :show-made-this="true"
+                :id-prefix="`saved-${recipe.id}`"
+                @add-to-grocery="(ings) => addUncheckedIngredientsToGrocery(recipe, ings)"
+                @made-this="onMadeThis(recipe)"
+              />
             </div>
         </template>
       </article>
     </div>
   </section>
+
+  <UsePantryModal
+    v-if="madeThisRecipe"
+    :recipe="madeThisRecipe"
+    :pantry-items="pantryItems"
+    @confirm="onPantryConfirm"
+    @cancel="madeThisRecipe = null"
+  />
+
+  <Transition name="toast">
+    <div v-if="toastMessage" class="toast" role="status" aria-live="polite">
+      {{ toastMessage }}
+    </div>
+  </Transition>
   </div>
 </template>
 
@@ -301,8 +437,10 @@ import {
   saveRecipe,  
 } from '@/services/api'
 import { usePrepMateStore } from '@/store/prepMateStore'
+import { usePantryStore } from '@/store/pantryStore'
 import AiLoader from '@/components/AiLoader.vue'
 import RecipeDisplay from '@/components/RecipeDisplay.vue'
+import UsePantryModal from '@/components/UsePantryModal.vue'
 
 const ADD_MODE_TITLES = {
   ai: 'Generate AI Recipe',
@@ -313,21 +451,102 @@ const ADD_MODE_TITLES = {
 
 export default {
   name: 'Recipes',
-  components: { AiLoader, RecipeDisplay },
+  components: { AiLoader, RecipeDisplay, UsePantryModal },
   setup() {
     const store = usePrepMateStore()
+    const pantryStore = usePantryStore()
     const addDropdownOpen = ref(false)
     const addWrapRef = ref(null)
     const addMode = ref(null)
 
-    const ingredients = ref('')
     const servings = ref(2)
     const cuisine = ref('')
     const dietary = ref('')
+    const cookingSkill = ref('intermediate')
+    const skillOptions = [
+      { value: 'beginner',     icon: '🥄', label: 'Beginner',     desc: 'Simple steps, minimal technique' },
+      { value: 'intermediate', icon: '🍳', label: 'Intermediate',  desc: 'Sauces, stir-fry, braising' },
+      { value: 'advanced',     icon: '👨‍🍳', label: 'Advanced',      desc: 'Pro techniques, complex dishes' },
+    ]
     const generating = ref(false)
     const recipeMessage = ref(null)
     const generatedRecipe = ref(null)
     const aiMode = ref('ingredients')
+
+    // Pantry ingredient selection
+    const pantryItems = computed(() => pantryStore.items.value)
+    const pantryExpanded = ref(false)
+    const selectedPantryIds = ref(new Set())
+
+    function togglePantryItem(id) {
+      const next = new Set(selectedPantryIds.value)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      selectedPantryIds.value = next
+    }
+
+    function selectAllPantry() {
+      selectedPantryIds.value = new Set(pantryItems.value.map((i) => i.id))
+    }
+
+    function clearPantrySelection() {
+      selectedPantryIds.value = new Set()
+    }
+
+    // ── Manual ingredient builder ──────────────────
+    const manualIngredients = ref([])
+    const ingName = ref('')
+    const ingQty = ref('')
+    const ingUnit = ref('')
+    const ingBrand = ref('')
+    const ingLocation = ref('')
+    let _ingId = 0
+
+    function onAddIngredient() {
+      const name = ingName.value.trim()
+      if (!name) return
+      manualIngredients.value.push({
+        _id: ++_ingId,
+        name,
+        quantity: ingQty.value !== '' && ingQty.value !== null ? String(ingQty.value) : '',
+        unit: ingUnit.value,
+        brand: ingBrand.value.trim(),
+        location: ingLocation.value,
+      })
+      ingName.value = ''
+      ingQty.value = ''
+      ingUnit.value = ''
+      ingBrand.value = ''
+      ingLocation.value = ''
+    }
+
+    function removeIngredient(id) {
+      manualIngredients.value = manualIngredients.value.filter((i) => i._id !== id)
+    }
+
+    function buildIngredientsString() {
+      const lines = []
+
+      for (const i of pantryItems.value.filter((i) => selectedPantryIds.value.has(i.id))) {
+        const parts = []
+        if (i.quantity) parts.push(`qty: ${i.quantity}${i.unit ? ' ' + i.unit : ''}`)
+        if (i.location) parts.push(`stored in: ${i.location}`)
+        const detail = parts.length ? ` (${parts.join(', ')})` : ''
+        lines.push(`- ${i.name}${detail}`)
+      }
+
+      for (const i of manualIngredients.value) {
+        const parts = []
+        if (i.quantity) parts.push(`qty: ${i.quantity}${i.unit ? ' ' + i.unit : ''}`)
+        if (i.brand) parts.push(`brand: ${i.brand}`)
+        if (i.location) parts.push(`stored in: ${i.location}`)
+        const detail = parts.length ? ` (${parts.join(', ')})` : ''
+        lines.push(`- ${i.name}${detail}`)
+      }
+
+      return lines.join('\n')
+    }
+
     const recipeName = ref('')
 
     const socialLink = ref('')
@@ -342,12 +561,16 @@ export default {
 
     const panelTitle = computed(() => (addMode.value ? ADD_MODE_TITLES[addMode.value] || 'Add recipe' : ''))
     const expandedRecipes = ref(new Set())
+
+    const toastMessage = ref('')
+    let toastTimer = null
     // ──────────────────────────────────────────────────────
     // LOAD SAVED RECIPES ON MOUNT
     // ──────────────────────────────────────────────────────
     onMounted(async () => {
       document.addEventListener('click', onDocClick)
-      await store.initialize()  // Load all saved recipes from backend
+      await store.initialize()
+      await pantryStore.initialize()
     })
 
     onUnmounted(() => {
@@ -399,10 +622,10 @@ export default {
       recipeMessage.value = null
 
       if (aiMode.value === "ingredients") {
-        if (!ingredients.value.trim()) {
-          recipeMessage.value = { text: 'Please enter at least one ingredient.', error: true }
+        if (!manualIngredients.value.length && selectedPantryIds.value.size === 0) {
+          recipeMessage.value = { text: 'Please enter at least one ingredient or select items from your pantry.', error: true }
           return
-        } 
+        }
       } else {
         if (!recipeName.value.trim()) {
           recipeMessage.value = { text: 'Please enter the name of the recipe you would like to create', error: true }
@@ -417,16 +640,18 @@ export default {
         
         if (aiMode.value === "ingredients") {
           recipe = await generateRecipeFromIngredients(
-            ingredients.value,
+            buildIngredientsString(),
             servings.value,
             cuisine.value,
-            dietary.value
+            dietary.value,
+            cookingSkill.value
           )
         } else {
           recipe = await generateRecipeFromName(
             recipeName.value,
             servings.value,
-            dietary.value
+            dietary.value,
+            cookingSkill.value
           )
         }
         
@@ -616,21 +841,79 @@ export default {
       }
     }
 
-    //temp
-    function onAddToGroceryPlaceholder() {
-      alert('Adding ingredients from a recipe to your grocery list is coming in a future sprint.')
+    function addUncheckedIngredientsToGrocery(recipe, ingredients) {
+      const existing = new Set(
+        (store.groceryItems.value || []).map((i) => (i.name || '').trim().toLowerCase())
+      )
+
+      const category = (recipe?.title || recipe?.name || 'Recipe').trim()
+      let addedCount = 0
+
+      for (const ing of ingredients || []) {
+        const name = (typeof ing === 'string' ? ing : ing?.name) || ''
+        const trimmed = name.trim()
+        if (!trimmed) continue
+        const key = trimmed.toLowerCase()
+        if (existing.has(key)) continue
+        store.addGroceryItem({
+          name: trimmed,
+          amount: ing?.quantity ?? '',
+          unit: ing?.unit ?? '',
+          category: ing?.category || category,
+          suggestedLocation: ing?.location ?? '',
+        })
+        existing.add(key)
+        addedCount++
+      }
+
+      if (toastTimer) clearTimeout(toastTimer)
+      toastMessage.value =
+        addedCount > 0
+          ? `Added ${addedCount} item${addedCount === 1 ? '' : 's'} to your grocery list.`
+          : 'Nothing new to add — everything was already on your grocery list.'
+      toastTimer = setTimeout(() => {
+        toastMessage.value = ''
+      }, 3000)
     }
 
+
+    // ── "I made this" pantry deduction ──────────────────
+    const madeThisRecipe = ref(null)
+
+    function onMadeThis(recipe) {
+      madeThisRecipe.value = recipe
+    }
+
+    async function onPantryConfirm({ updates, deletes }) {
+      for (const { id, newQty, newUnit } of updates) {
+        await pantryStore.updateItem(id, { quantity: newQty, unit: newUnit })
+      }
+      for (const id of deletes) {
+        await pantryStore.removeItem(id)
+      }
+      madeThisRecipe.value = null
+      toastMessage.value = 'Pantry updated!'
+      toastTimer = setTimeout(() => { toastMessage.value = '' }, 3000)
+    }
 
     return {
       addDropdownOpen,
       addWrapRef,
       addMode,
       panelTitle,
-      ingredients,
+      manualIngredients,
+      ingName,
+      ingQty,
+      ingUnit,
+      ingBrand,
+      ingLocation,
+      onAddIngredient,
+      removeIngredient,
       servings,
       cuisine,
       dietary,
+      cookingSkill,
+      skillOptions,
       generating,
       recipeMessage,
       generatedRecipe,
@@ -656,13 +939,22 @@ export default {
       onSubmitImage,
       onSubmitText,
       remove,
-      onAddToGroceryPlaceholder,
+      addUncheckedIngredientsToGrocery,
+      toastMessage,
       aiMode,
       recipeName,
       onSaveGenerated,
       expandedRecipes,
       toggleRecipe,
-      
+      pantryItems,
+      pantryExpanded,
+      selectedPantryIds,
+      togglePantryItem,
+      selectAllPantry,
+      clearPantrySelection,
+      madeThisRecipe,
+      onMadeThis,
+      onPantryConfirm,
     }
   }
 }
@@ -676,6 +968,312 @@ export default {
   max-width: 900px;
   margin: 0 auto;
   padding: 1rem;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: var(--prep-card);
+  border: 1px solid var(--prep-primary);
+  color: var(--prep-text);
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  z-index: 100;
+  max-width: min(560px, calc(100vw - 32px));
+}
+
+/* ── Pantry picker ───────────────────────────── */
+.pantry-group {
+  border: 1px solid rgba(0, 200, 180, 0.3);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pantry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  background: rgba(0, 200, 180, 0.07);
+  user-select: none;
+}
+
+.pantry-header:hover {
+  background: rgba(0, 200, 180, 0.12);
+}
+
+.pantry-header-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--prep-primary);
+}
+
+.pantry-count {
+  font-weight: 400;
+  color: var(--prep-muted);
+}
+
+.pantry-chevron {
+  font-size: 0.7rem;
+  color: var(--prep-muted);
+  transition: transform 0.2s;
+}
+
+.pantry-chevron.open {
+  transform: rotate(180deg);
+}
+
+.pantry-picker {
+  padding: 0.75rem 0.85rem;
+  border-top: 1px solid rgba(0, 200, 180, 0.2);
+}
+
+.pantry-picker-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.pantry-ctrl-btn {
+  padding: 0.25rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 5px;
+  border: 1px solid var(--prep-border);
+  background: transparent;
+  color: var(--prep-muted);
+  cursor: pointer;
+  font-family: var(--prep-font-body);
+  transition: all 0.12s;
+}
+
+.pantry-ctrl-btn:hover {
+  color: var(--prep-primary);
+  border-color: var(--prep-primary);
+}
+
+.pantry-item-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pantry-item-check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 20px;
+  border: 1px solid var(--prep-border);
+  background: var(--prep-card);
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--prep-muted);
+  transition: all 0.12s;
+  user-select: none;
+}
+
+.pantry-item-check:hover {
+  border-color: var(--prep-primary);
+  color: var(--prep-text);
+}
+
+.pantry-item-check.selected {
+  background: rgba(0, 200, 180, 0.15);
+  border-color: var(--prep-primary);
+  color: var(--prep-primary);
+}
+
+.pantry-item-check input[type='checkbox'] {
+  display: none;
+}
+
+.pantry-item-name {
+  font-weight: 600;
+}
+
+.pantry-item-qty {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.pantry-item-loc {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--prep-primary);
+  background: rgba(0, 200, 180, 0.1);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  margin-left: 0.2rem;
+  text-transform: capitalize;
+}
+
+/* ── Ingredient builder ──────────────────────── */
+.ing-builder {
+  margin-bottom: 0;
+}
+
+.ing-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.ing-input {
+  padding: 0.45rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid var(--prep-border);
+  font-size: 0.875rem;
+  background: var(--prep-bg);
+  color: var(--prep-text);
+  font-family: var(--prep-font-body);
+}
+
+.ing-input:focus {
+  outline: none;
+  border-color: var(--prep-primary);
+  box-shadow: 0 0 0 2px rgba(0, 200, 180, 0.15);
+}
+
+.ing-input--qty::-webkit-inner-spin-button,
+.ing-input--qty::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.ing-input--qty { -moz-appearance: textfield; appearance: textfield; }
+
+.ing-input--name  { flex: 1; min-width: 140px; }
+.ing-input--qty   { width: 70px; }
+.ing-input--unit  { width: 120px; }
+.ing-input--brand { width: 110px; }
+.ing-input--loc   { width: 110px; }
+
+.ing-add-btn {
+  padding: 0.45rem 0.9rem;
+  border-radius: 7px;
+  border: 1px solid var(--prep-primary);
+  background: transparent;
+  color: var(--prep-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--prep-font-body);
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ing-add-btn:hover:not(:disabled) {
+  background: rgba(0, 200, 180, 0.1);
+}
+
+.ing-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ing-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--prep-card);
+  border: 1px solid var(--prep-border);
+  border-radius: 999px;
+  padding: 0.25rem 0.3rem 0.25rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.ing-chip-text {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--prep-text);
+}
+
+.ing-chip-qty {
+  color: var(--prep-primary);
+  font-weight: 600;
+}
+
+.ing-chip-brand {
+  color: var(--prep-muted);
+}
+
+.ing-chip-loc {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--prep-primary);
+  background: rgba(0, 200, 180, 0.12);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  text-transform: capitalize;
+}
+
+.ing-chip-remove {
+  background: transparent;
+  border: none;
+  color: var(--prep-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  border-radius: 50%;
+  transition: color 0.12s, background 0.12s;
+}
+
+.ing-chip-remove:hover {
+  color: var(--prep-error);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.ing-empty-hint {
+  font-size: 0.8rem;
+  color: var(--prep-muted);
+  margin-top: 0.5rem;
+}
+
+.ing-item-enter-active { transition: opacity 0.15s ease, transform 0.15s ease; }
+.ing-item-leave-active { transition: opacity 0.1s ease; }
+.ing-item-enter-from { opacity: 0; transform: scale(0.9); }
+.ing-item-leave-to   { opacity: 0; }
+
+.pantry-note {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--prep-primary);
+  font-weight: 500;
+}
+
+.expand-enter-active, .expand-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.expand-enter-from, .expand-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
 }
 
 /* ─────────────────────────────────────────────
@@ -963,6 +1561,55 @@ export default {
   font-weight: 600;
   color: var(--prep-text);
   font-size: 0.9rem;
+}
+
+.skill-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.skill-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.65rem 0.5rem;
+  border: 1px solid var(--prep-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  text-align: center;
+}
+
+.skill-card:hover {
+  border-color: var(--prep-primary);
+  background: rgba(0, 200, 180, 0.04);
+}
+
+.skill-card.selected {
+  border-color: var(--prep-primary);
+  background: rgba(0, 200, 180, 0.1);
+}
+
+.skill-radio { display: none; }
+
+.skill-icon { font-size: 1.3rem; }
+
+.skill-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--prep-text);
+}
+
+.skill-card.selected .skill-title { color: var(--prep-primary); }
+
+.skill-desc {
+  font-size: 0.7rem;
+  color: var(--prep-muted);
+  line-height: 1.3;
 }
 
 .form-group textarea,

@@ -53,16 +53,37 @@ async function removeSavedRecipe(id) {
 // ─────────────────────────────────────────────
 // GROCERY LIST (local only, no backend yet)
 // ─────────────────────────────────────────────
-function addGroceryItem({ name, quantity }) {
+function addGroceryItem({ name, amount, unit, category, brand, suggestedLocation }) {
   state.groceryItems.push({
     id: state.nextGroceryId++,
     name,
-    quantity,
+    amount: amount ?? '',
+    unit: unit ?? '',
+    brand: brand ?? '',
+    category: category ?? 'Other',
+    checked: false,
+    suggestedLocation: suggestedLocation ?? '',
   })
+}
+
+function updateGroceryItem(id, patch) {
+  const item = state.groceryItems.find((i) => i.id === id)
+  if (!item) return
+  Object.assign(item, patch)
+}
+
+function toggleGroceryItemChecked(id) {
+  const item = state.groceryItems.find((i) => i.id === id)
+  if (!item) return
+  item.checked = !item.checked
 }
 
 function deleteGroceryItem(id) {
   state.groceryItems = state.groceryItems.filter(item => item.id !== id)
+}
+
+function clearGroceryItems() {
+  state.groceryItems = []
 }
 
 // ─────────────────────────────────────────────
@@ -80,6 +101,9 @@ export function usePrepMateStore() {
     addRecipeToState,
     removeSavedRecipe,
     addGroceryItem,
+    updateGroceryItem,
+    toggleGroceryItemChecked,
     deleteGroceryItem,
+    clearGroceryItems,
   }
 }

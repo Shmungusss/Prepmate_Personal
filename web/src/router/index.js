@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Home from '@/views/Home.vue'
 import Recipes from '@/views/Recipes.vue'
 import GroceryList from '@/views/GroceryList.vue'
+import Pantry from '@/views/Pantry.vue'
+import MealPlan from '@/views/MealPlan.vue'
 import { useAuthStore } from '@/store/authStore'
 
 const routes = [
@@ -19,6 +21,16 @@ const routes = [
     path: '/grocery-list',
     name: 'GroceryList',
     component: GroceryList
+  },
+  {
+    path: '/pantry',
+    name: 'Pantry',
+    component: Pantry
+  },
+  {
+    path: '/meal-plan',
+    name: 'MealPlan',
+    component: MealPlan
   }
 ]
 

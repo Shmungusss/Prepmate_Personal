@@ -49,6 +49,18 @@ class Ingredient(BaseModel):
     unit: str = Field(..., description="Unit of measurement (e.g., cups, tbsp, lbs, count)")
     notes: Optional[str] = Field(None, description="Additional notes (e.g., 'chopped', 'diced', 'to taste')")
     optional: bool = Field(default=False, description="Whether this ingredient is optional")
+    location: Optional[str] = Field(
+        None,
+        description="Where this ingredient is stored: 'fridge' (dairy, fresh produce, eggs, meats, leftovers), "
+                    "'freezer' (frozen meats, frozen vegetables, ice cream), "
+                    "'pantry' (canned goods, grains, oils, flour, sugar, shelf-stable items), "
+                    "or 'spices' (dried herbs, spices, seasoning blends)"
+    )
+    category: Optional[str] = Field(
+        None,
+        description="Pantry category: one of 'Produce', 'Dairy & Eggs', 'Meat & Seafood', "
+                    "'Grains & Bread', 'Pantry Staples', 'Beverages', 'Other'"
+    )
 
 class RecipeStep(BaseModel):
     """Individual step in recipe instructions"""
@@ -121,12 +133,14 @@ class GroceryList(BaseModel):
 # These save models our for the /recipes endpoint
 class saveIngredient(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: str
     quantity: float
     unit: str
     notes: Optional[str] = None
     optional: bool = False
+    location: Optional[str] = None
+    category: Optional[str] = None
 
 class saveRecipeStep(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -147,8 +161,8 @@ class saveRecipe(BaseModel):
     cook_time_minutes: int
     total_time_minutes: int
     servings: int
-    ingredients: List[Ingredient] = []
-    instructions: List[RecipeStep] = []
+    ingredients: List[saveIngredient] = []
+    instructions: List[saveRecipeStep] = []
     dietary_tags: Optional[List[str]] = None
     tips: Optional[List[str]] = None
     notes: Optional[str] = None
@@ -171,3 +185,32 @@ class saveRecipe(BaseModel):
             except (json.JSONDecodeError, TypeError):
                 return None
         return v
+
+
+# Receipt scanning models
+class MealPlanEntry(BaseModel):
+    date: str = Field(..., description="ISO date YYYY-MM-DD — use exactly the date from the prompt")
+    meal_type: str = Field(..., description="breakfast, lunch, dinner, or snack — match what was requested")
+    recipe: Recipe = Field(..., description="Complete full recipe for this meal")
+
+
+class DayPlanOutput(BaseModel):
+    entries: List[MealPlanEntry] = Field(
+        ...,
+        description="One entry per requested meal_type. If 3 meal types were requested, return exactly 3 entries."
+    )
+
+
+class ReceiptItem(BaseModel):
+    """A single food/grocery item extracted from a receipt"""
+    name: str = Field(..., description="Name of the food or grocery item")
+    quantity: Optional[float] = Field(None, description="Quantity if shown on receipt", gt=0)
+    unit: Optional[str] = Field(None, description="Unit of measurement if identifiable (e.g. lbs, oz, count)")
+    category: str = Field(
+        ...,
+        description="Category: one of Produce, Dairy & Eggs, Meat & Seafood, Grains & Bread, Pantry Staples, Beverages, Other"
+    )
+
+class ReceiptScanResult(BaseModel):
+    """All food/grocery items extracted from a receipt image"""
+    items: List[ReceiptItem] = Field(..., description="List of food and grocery items found on the receipt")
