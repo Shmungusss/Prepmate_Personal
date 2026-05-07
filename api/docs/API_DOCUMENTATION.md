@@ -35,102 +35,154 @@ The PrepMate API provides endpoints for recipe generation, grocery list manageme
 
 #### Check API Health
 
-Get the current health status of the API.
-
 ```http
 GET /api/health
 ```
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "service": "api",
-  "version": "0.1.0",
-  "timestamp": "2024-02-10T15:30:00Z"
-}
-```
+Returns API health and version info.
 
 ---
 
 ### Recipes
 
-#### Generate Recipe
-
-Generate a recipe based on available ingredients and preferences.
+#### Generate Recipe from Ingredients
 
 ```http
-POST /api/recipes/generate
+POST /recipe/generate/from-ingredients
 ```
-
-**Request Body:**
-```json
+Request body:
+```
 {
   "ingredients": "chicken, rice, garlic, onions",
   "servings": 4,
   "cuisine": "italian",
-  "dietary": "gluten-free"
+  "dietary_restrictions": "gluten-free",
+  "cooking_skill": "intermediate"
 }
 ```
 
-**Request Parameters:**
+#### Generate Recipe from Name
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ingredients` | string | Yes | Comma-separated list of ingredients |
-| `servings` | integer | Yes | Number of servings (1-10) |
-| `cuisine` | string | No | Preferred cuisine type |
-| `dietary` | string | No | Dietary restrictions/preferences |
-
-**Response:** (201 Created)
-```json
+```http
+POST /recipe/generate/from-name
+```
+Request body:
+```
 {
-  "id": "recipe_123",
-  "title": "Italian Chicken and Rice",
-  "description": "A delicious gluten-free Italian dish",
-  "servings": 4,
-  "prep_time": 15,
-  "cook_time": 30,
-  "total_time": 45,
-  "difficulty": "medium",
-  "ingredients": [
-    {
-      "name": "chicken breast",
-      "quantity": 500,
-      "unit": "g",
-      "category": "protein"
-    },
-    {
-      "name": "rice",
-      "quantity": 2,
-      "unit": "cups",
-      "category": "grains"
-    }
-  ],
-  "instructions": [
-    {
-      "step": 1,
-      "description": "Preheat oven to 180°C"
-    },
-    {
-      "step": 2,
-      "description": "Season chicken with salt and pepper"
-    }
-  ],
-  "nutrition": {
-    "calories": 450,
-    "protein": 35,
-    "carbs": 50,
-    "fat": 12
-  },
-  "created_at": "2024-02-10T15:30:00Z"
+  "recipe": "Chicken Alfredo",
+  "servings": 2,
+  "dietary_restrictions": "vegetarian",
+  "cooking_skill": "beginner"
 }
 ```
 
-**Errors:**
-- `400 Bad Request` - Invalid input (missing ingredients, invalid servings)
-- `429 Too Many Requests` - Rate limit exceeded
-- `500 Internal Server Error` - OpenAI API error
+#### Generate Recipe from Text
+
+```http
+POST /recipe/generate/from-text
+```
+Request body:
+```
+{
+  "text": "2 eggs, 1 cup flour, 1/2 cup milk..."
+}
+```
+
+#### Generate Recipe from Social Link
+
+```http
+POST /recipe/generate/from-link
+```
+Request body:
+```
+{
+  "url": "https://www.instagram.com/p/abc123/"
+}
+```
+
+#### Generate Recipe from Image
+
+```http
+POST /api/recipes/from-image
+```
+Form-data: `image` (file)
+
+#### Get All Recipes
+
+```http
+GET /recipes
+```
+
+#### Get Recipe by ID
+
+```http
+GET /recipes/{recipe_id}
+```
+
+#### Save Meal-Plan Recipe to Collection
+
+```http
+POST /recipes/{recipe_id}/save-to-collection
+```
+
+#### Delete Recipe by ID
+
+```http
+DELETE /recipes/{recipe_id}
+```
+
+#### Manually Save a Recipe
+
+```http
+POST /recipes/save
+```
+Request body: Recipe object
+
+---
+
+### Grocery Lists
+
+#### Generate Grocery List from Preferences
+
+```http
+POST /grocery-lists/generate/from-preferences
+```
+Request body: GroceryListRequest object
+
+#### Get All Grocery Lists
+
+```http
+GET /grocery-lists
+```
+
+#### Get Grocery List by ID
+
+```http
+GET /grocery-lists/{list_id}
+```
+
+#### Delete Grocery List by ID
+
+```http
+DELETE /grocery-lists/{list_id}
+```
+
+---
+
+### Users
+
+#### Register User
+
+```http
+POST /users/register
+```
+Request body: UserCreateRequest object
+
+#### Get User by ID
+
+```http
+GET /users/{user_id}
+```
 
 ---
 

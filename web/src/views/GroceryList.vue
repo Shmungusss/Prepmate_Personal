@@ -383,6 +383,7 @@ export default {
     }
 
     onMounted(() => {
+      store.initialize()
       document.addEventListener('keydown', onKeydown)
     })
 

@@ -107,7 +107,7 @@
       </div>
   
       <!-- Action buttons -->
-      <div v-if="!hideActions || showAddToGrocery || showMadeThis || showSaveToCollection" class="recipe-actions">
+      <div v-if="!hideActions || showAddToGrocery || showAddCheckedToPantry || showMadeThis || showSaveToCollection" class="recipe-actions">
         <button
           v-if="!hideActions"
           class="action-btn action-btn--secondary"
@@ -123,11 +123,20 @@
           💾 Save Recipe
         </button>
         <button
+          v-if="showAddCheckedToPantry"
+          type="button"
+          class="action-btn action-btn--secondary"
+          :disabled="checkedIngredientCount === 0"
+          @click="emitAddCheckedToPantry"
+        >
+          Add Selected to Pantry
+        </button>
+        <button
           v-if="showAddToGrocery"
           class="action-btn action-btn--primary"
           @click="emitAddUncheckedToGrocery"
         >
-          Add unchecked to Grocery
+          Add Remaining to Grocery
         </button>
         <button
           v-if="showMadeThis"
@@ -148,7 +157,7 @@
   </template>
   
   <script>
-  import { ref, watch } from 'vue'
+  import { ref, watch, computed } from 'vue'
   
   export default {
     name: 'RecipeDisplay',
@@ -166,6 +175,10 @@
         type: Boolean,
         default: false,
       },
+      showAddCheckedToPantry: {
+        type: Boolean,
+        default: false,
+      },
       showMadeThis: {
         type: Boolean,
         default: false,
@@ -180,7 +193,7 @@
       },
     },
 
-    emits: ['close', 'save', 'add-to-grocery', 'made-this', 'save-to-collection'],
+    emits: ['close', 'save', 'add-to-grocery', 'add-to-pantry', 'made-this', 'save-to-collection'],
   
     setup(props, { emit }) {
       const activeTab = ref('ingredients')
@@ -211,10 +224,18 @@
         checkedIngredientIdxs.value = next
       }
 
+      const checkedIngredientCount = computed(() => checkedIngredientIdxs.value.size)
+
       function emitAddUncheckedToGrocery() {
         const ingredients = props.recipe?.ingredients || []
         const unchecked = ingredients.filter((_, idx) => !checkedIngredientIdxs.value.has(idx))
         emit('add-to-grocery', unchecked)
+      }
+
+      function emitAddCheckedToPantry() {
+        const ingredients = props.recipe?.ingredients || []
+        const selected = ingredients.filter((_, idx) => checkedIngredientIdxs.value.has(idx))
+        emit('add-to-pantry', selected)
       }
   
       function formatQuantity(qty) {
@@ -238,7 +259,9 @@
         activeTab,
         isIngredientChecked,
         toggleIngredientChecked,
+        checkedIngredientCount,
         emitAddUncheckedToGrocery,
+        emitAddCheckedToPantry,
         tabs,
         formatQuantity,
         formatCuisine,
@@ -554,6 +577,14 @@
     cursor: pointer;
     font-family: inherit;
     transition: all 0.2s ease;
+  }
+
+  .action-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    pointer-events: none;
   }
   
   .action-btn--primary {

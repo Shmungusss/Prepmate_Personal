@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -99,9 +99,33 @@ async def health_check():
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
+# generate recipe from social media link
+@app.post("/recipe/generate/from-link")
+async def create_recipe_from_link(
+    body: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Accepts a social media link, uses AI to extract and generate a recipe."""
+    url = body.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing 'url' in request body")
+    try:
+        # Placeholder: Replace with actual AI extraction logic as needed
+        # For now, just return a dummy recipe structure
+        # result = await utils.recipe_from_link(url)
+        result = {
+            "title": "Extracted Recipe from Link",
+            "ingredients": ["ingredient 1", "ingredient 2"],
+            "steps": ["Step 1", "Step 2"],
+            "tips": ["Tip 1"]
+        }
+        return {"result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Recipe extraction from link failed: {str(e)}")
+
 # generate grocery list from user preferences
 @app.post("/grocery-lists/generate/from-preferences")
-async def generate_list(request: GroceryListRequest, db: Session = Depends(get_db)):
+async def generate_list(request: GroceryListRequest, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     try:
         user_prompt = await prompts.create_grocery_list_user_prompt(
             family_size=request.family_size,
@@ -117,7 +141,7 @@ async def generate_list(request: GroceryListRequest, db: Session = Depends(get_d
 
         List = extract_parsed_response(response.output)
 
-        db_list = crud.save_grocery_list_to_db(db, List)
+        db_list = crud.save_grocery_list_to_db(db, List, user_id=x_user_id)
 
         result = List.model_dump()
 
@@ -219,9 +243,9 @@ async def create_recipe_from_image(file: UploadFile = File(...), db: Session = D
 
 # get all recipes
 @app.get("/recipes", response_model=list[saveRecipe])
-async def get_all_recipes(db: Session = Depends(get_db)):
+async def get_all_recipes(db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     """Get all saved recipes"""
-    recipes = crud.get_all_recipes(db)
+    recipes = crud.get_all_recipes(db, user_id=x_user_id)
     return recipes
 
 # get recipe by id
@@ -235,9 +259,14 @@ async def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
 
 # save a meal-plan recipe to the user's collection
 @app.post("/recipes/{recipe_id}/save-to-collection")
-async def save_recipe_to_collection(recipe_id: int, db: Session = Depends(get_db)):
+async def save_recipe_to_collection(recipe_id: int, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     """Promote a meal-plan recipe into the user's saved recipe collection"""
     recipe = crud.promote_recipe_to_collection(db, recipe_id)
+    # If the recipe has no owner and we have a user id, assign it
+    if recipe and getattr(recipe, "user_id", None) is None and x_user_id is not None:
+        recipe.user_id = x_user_id
+        db.commit()
+        db.refresh(recipe)
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return saveRecipe.model_validate(recipe).model_dump()
@@ -252,34 +281,93 @@ async def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
     return {"message": "Recipe deleted successfully"}
 
 
+@app.post("/grocery-lists", status_code=201)
+async def create_grocery_list(grocery_list: GroceryList, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    """Create a new grocery list and persist it to the database"""
+    saved = crud.save_grocery_list_to_db(db, grocery_list, user_id=x_user_id)
+    return {
+        "id": saved.id,
+        "title": saved.title,
+        "items": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "category": item.category,
+                "estimated_price": item.estimated_price,
+                "notes": item.notes,
+            }
+            for item in saved.items
+        ],
+        "total_estimated_cost": saved.total_estimated_cost,
+        "dietary_preferences": json.loads(saved.dietary_preferences) if saved.dietary_preferences else None,
+        "serves": saved.serves,
+        "notes": saved.notes,
+        "created_at": saved.created_at.isoformat() if saved.created_at else None,
+    }
+
+
+@app.put("/grocery-lists/{list_id}")
+async def edit_grocery_list(list_id: int, grocery_list: GroceryList, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    """Update an existing grocery list"""
+    saved = crud.update_grocery_list(db, list_id, grocery_list, user_id=x_user_id)
+    if not saved:
+        raise HTTPException(status_code=404, detail="Grocery list not found")
+    return {
+        "id": saved.id,
+        "title": saved.title,
+        "items": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "category": item.category,
+                "estimated_price": item.estimated_price,
+                "notes": item.notes,
+            }
+            for item in saved.items
+        ],
+        "total_estimated_cost": saved.total_estimated_cost,
+        "dietary_preferences": json.loads(saved.dietary_preferences) if saved.dietary_preferences else None,
+        "serves": saved.serves,
+        "notes": saved.notes,
+        "created_at": saved.created_at.isoformat() if saved.created_at else None,
+    }
+
+
 @app.get("/grocery-lists")
-async def get_all_grocery_lists(db: Session = Depends(get_db)):
+async def get_all_grocery_lists(db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     """Get all saved grocery lists"""
-    lists = crud.get_all_grocery_lists(db)
+    lists = crud.get_all_grocery_lists(db, user_id=x_user_id)
     return lists
 
 
 @app.get("/grocery-lists/{list_id}")
-async def get_grocery_list(list_id: int, db: Session = Depends(get_db)):
+async def get_grocery_list(list_id: int, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     """Get a single grocery list by ID"""
-    grocery_list = crud.get_grocery_list_by_id(db, list_id)
+    grocery_list = crud.get_grocery_list_by_id(db, list_id, user_id=x_user_id)
     if not grocery_list:
         raise HTTPException(status_code=404, detail="Grocery list not found")
     return grocery_list
 
 
 @app.delete("/grocery-lists/{list_id}")
-async def delete_grocery_list(list_id: int, db: Session = Depends(get_db)):
+async def delete_grocery_list(list_id: int, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     """Delete a grocery list"""
+    grocery_list = crud.get_grocery_list_by_id(db, list_id, user_id=x_user_id)
+    if not grocery_list:
+        raise HTTPException(status_code=404, detail="Grocery list not found")
     success = crud.delete_grocery_list(db, list_id)
     if not success:
         raise HTTPException(status_code=404, detail="Grocery list not found")
     return {"message": "Grocery list deleted successfully"}
 
 @app.post("/recipes/save", response_model=saveRecipe)
-async def save_recipe(recipe: Recipe, db: Session = Depends(get_db)):
+async def save_recipe(recipe: Recipe, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     """Manually save a recipe when user clicks 'Save'"""
-    saved = crud.save_recipe_to_db(db, recipe)
+    saved = crud.save_recipe_to_db(db, recipe, user_id=x_user_id)
     return saved
 
 
@@ -353,16 +441,16 @@ async def get_all_users(db: Session = Depends(get_db)):
 
 # ── Pantry endpoints ──────────────────────────────────
 @app.get("/pantry/items", response_model=list[schemas.PantryItemOut])
-def get_pantry_items(db: Session = Depends(get_db)):
-    return crud.get_all_pantry_items(db)
+def get_pantry_items(db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    return crud.get_all_pantry_items(db, user_id=x_user_id)
 
 @app.post("/pantry/items", response_model=schemas.PantryItemOut, status_code=201)
-def create_pantry_item(item: schemas.PantryItemCreate, db: Session = Depends(get_db)):
-    return crud.create_pantry_item(db, item)
+def create_pantry_item(item: schemas.PantryItemCreate, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    return crud.create_pantry_item(db, item, user_id=x_user_id)
 
 @app.post("/pantry/items/bulk", response_model=list[schemas.PantryItemOut], status_code=201)
-def bulk_create_pantry_items(body: schemas.PantryBulkCreate, db: Session = Depends(get_db)):
-    return crud.bulk_create_pantry_items(db, body.items)
+def bulk_create_pantry_items(body: schemas.PantryBulkCreate, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    return crud.bulk_create_pantry_items(db, body.items, user_id=x_user_id)
 
 @app.put("/pantry/items/{item_id}", response_model=schemas.PantryItemOut)
 def update_pantry_item(item_id: int, patch: schemas.PantryItemUpdate, db: Session = Depends(get_db)):
@@ -480,7 +568,7 @@ async def scan_receipt(file: UploadFile = File(...)):
 # ── Meal Plan endpoints ────────────────────────────────
 
 @app.post("/meal-plans/generate/day")
-async def generate_day_plan(request: schemas.DayGenerateRequest, db: Session = Depends(get_db)):
+async def generate_day_plan(request: schemas.DayGenerateRequest, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
     try:
         user_prompt = await prompts.create_day_plan_prompt(request)
         response = await call_llm(client, prompts.MEAL_PLAN_SYSTEM_PROMPT, user_prompt, DayPlanOutput)
@@ -489,7 +577,7 @@ async def generate_day_plan(request: schemas.DayGenerateRequest, db: Session = D
             raise HTTPException(500, "Failed to generate day plan")
         result_entries = []
         for entry in day_plan.entries:
-            saved = crud.save_recipe_to_db(db, entry.recipe, from_meal_plan=True)
+            saved = crud.save_recipe_to_db(db, entry.recipe, from_meal_plan=True, user_id=x_user_id)
             recipe_data = saveRecipe.model_validate(saved).model_dump()
             if recipe_data.get('created_at') and hasattr(recipe_data['created_at'], 'isoformat'):
                 recipe_data['created_at'] = recipe_data['created_at'].isoformat()
@@ -506,8 +594,8 @@ async def generate_day_plan(request: schemas.DayGenerateRequest, db: Session = D
 
 
 @app.post("/meal-plans", status_code=201)
-def save_meal_plan_endpoint(plan: schemas.MealPlanCreate, db: Session = Depends(get_db)):
-    saved = crud.save_meal_plan(db, plan)
+def save_meal_plan_endpoint(plan: schemas.MealPlanCreate, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    saved = crud.save_meal_plan(db, plan, user_id=x_user_id)
     return {
         "id": saved.id,
         "name": saved.name,
@@ -519,8 +607,8 @@ def save_meal_plan_endpoint(plan: schemas.MealPlanCreate, db: Session = Depends(
 
 
 @app.get("/meal-plans")
-def get_meal_plans(db: Session = Depends(get_db)):
-    plans = crud.get_all_meal_plans(db)
+def get_meal_plans(db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    plans = crud.get_all_meal_plans(db, user_id=x_user_id)
     return [
         {
             "id": p.id,
@@ -535,8 +623,8 @@ def get_meal_plans(db: Session = Depends(get_db)):
 
 
 @app.get("/meal-plans/{plan_id}")
-def get_meal_plan(plan_id: int, db: Session = Depends(get_db)):
-    plan = crud.get_meal_plan_by_id(db, plan_id)
+def get_meal_plan(plan_id: int, db: Session = Depends(get_db), x_user_id: int | None = Header(None, alias="X-User-Id")):
+    plan = crud.get_meal_plan_by_id(db, plan_id, user_id=x_user_id)
     if not plan:
         raise HTTPException(404, "Meal plan not found")
     meals_out = []
@@ -587,3 +675,43 @@ def update_planned_meal(plan_id: int, body: UpdatePlannedMealBody, db: Session =
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+
+@app.post("/users/login")
+async def login_user(request: UserLoginRequest, db: Session = Depends(get_db)):
+    """Login user - check credentials against database"""
+    try:
+        identifier = request.username_or_email or request.email
+        if not identifier:
+            raise HTTPException(status_code=400, detail="Username or email is required")
+
+        user = db.query(db_models.DBUser).filter(
+            (db_models.DBUser.email == identifier) | (db_models.DBUser.username == identifier)
+        ).first()
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username/email or password")
+        
+        # Check password (NOTE: This is plain text comparison - use bcrypt in production!)
+        if user.hashed_password != request.password:
+            raise HTTPException(status_code=401, detail="Invalid username/email or password")
+        
+        # Update last login time
+        user.last_login = datetime.now(timezone.utc)
+        db.commit()
+        
+        # Return user data (in production, return a JWT token instead)
+        return {
+            "success": True,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "default_servings": user.default_servings,
+                "dietary_restrictions": json.loads(user.dietary_restrictions) if user.dietary_restrictions else None
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")

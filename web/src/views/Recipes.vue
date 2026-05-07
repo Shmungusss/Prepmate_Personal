@@ -398,9 +398,11 @@
               <RecipeDisplay
                 :recipe="recipe"
                 :hide-actions="true"
+                :show-add-checked-to-pantry="true"
                 :show-add-to-grocery="true"
                 :show-made-this="true"
                 :id-prefix="`saved-${recipe.id}`"
+                @add-to-pantry="addCheckedIngredientsToPantry"
                 @add-to-grocery="(ings) => addUncheckedIngredientsToGrocery(recipe, ings)"
                 @made-this="onMadeThis(recipe)"
               />
@@ -437,7 +439,7 @@ import {
   saveRecipe,  
 } from '@/services/api'
 import { usePrepMateStore } from '@/store/prepMateStore'
-import { usePantryStore } from '@/store/pantryStore'
+import { usePantryStore, PANTRY_CATEGORIES } from '@/store/pantryStore'
 import AiLoader from '@/components/AiLoader.vue'
 import RecipeDisplay from '@/components/RecipeDisplay.vue'
 import UsePantryModal from '@/components/UsePantryModal.vue'
@@ -876,6 +878,67 @@ export default {
       }, 3000)
     }
 
+    const PANTRY_LOCATIONS = new Set(['fridge', 'freezer', 'pantry', 'spices'])
+
+    async function addCheckedIngredientsToPantry(ingredients) {
+      const selectedCount = (ingredients || []).reduce((count, i) => {
+        const n = (typeof i === 'string' ? i : i?.name) || ''
+        return count + (n.trim().length > 0 ? 1 : 0)
+      }, 0)
+      const existing = new Set(
+        (pantryStore.items.value || []).map((i) => (i.name || '').trim().toLowerCase())
+      )
+
+      let addedCount = 0
+      const failed = []
+
+      for (const ing of ingredients || []) {
+        const name = (typeof ing === 'string' ? ing : ing?.name) || ''
+        const trimmed = name.trim()
+        if (!trimmed) continue
+        const key = trimmed.toLowerCase()
+        if (existing.has(key)) continue
+
+        const rawLoc = (ing?.location || '').toString().toLowerCase()
+        const location = PANTRY_LOCATIONS.has(rawLoc) ? rawLoc : 'pantry'
+        const qty = ing?.quantity
+        const quantityStr = qty != null && qty !== '' ? String(qty) : ''
+        const cat = ing?.category && PANTRY_CATEGORIES.includes(ing.category) ? ing.category : 'Other'
+
+        try {
+          await pantryStore.addItem({
+            name: trimmed,
+            quantity: quantityStr,
+            unit: (ing?.unit ?? '').toString(),
+            location,
+            category: cat,
+          })
+          existing.add(key)
+          addedCount++
+        } catch {
+          failed.push(trimmed)
+        }
+      }
+
+      if (toastTimer) clearTimeout(toastTimer)
+      if (failed.length) {
+        toastMessage.value = `Could not add: ${failed.join(', ')}. Try again.`
+      } else if (addedCount > 0) {
+        toastMessage.value =
+          selectedCount === addedCount
+            ? `Added ${addedCount} item${addedCount === 1 ? '' : 's'} to your pantry.`
+            : `Added ${addedCount} of ${selectedCount} selected items to your pantry.`
+      } else {
+        const hadSelection = selectedCount > 0
+        toastMessage.value = hadSelection
+          ? 'Nothing new to add — selected items are already in your pantry.'
+          : 'Check the ingredients you have, then tap Add selected to Pantry.'
+      }
+      toastTimer = setTimeout(() => {
+        toastMessage.value = ''
+      }, 3000)
+    }
+
 
     // ── "I made this" pantry deduction ──────────────────
     const madeThisRecipe = ref(null)
@@ -940,6 +1003,7 @@ export default {
       onSubmitText,
       remove,
       addUncheckedIngredientsToGrocery,
+      addCheckedIngredientsToPantry,
       toastMessage,
       aiMode,
       recipeName,

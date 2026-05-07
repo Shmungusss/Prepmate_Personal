@@ -1,11 +1,12 @@
 import { reactive, computed } from 'vue'
-import { fetchAllRecipes, deleteRecipe } from '@/services/api'
+import { fetchAllRecipes, deleteRecipe, fetchGroceryLists, createGroceryList, updateGroceryList } from '@/services/api'
 
 const state = reactive({
   savedRecipes: [],
   loading: false,
   error: null,
   groceryItems: [],
+  groceryListId: null,
   nextGroceryId: 1,
 })
 
@@ -17,11 +18,64 @@ async function initialize() {
   state.error = null
   try {
     state.savedRecipes = await fetchAllRecipes()
+    await loadGroceryList()
   } catch (error) {
     state.error = error.message
-    console.error('Failed to load recipes:', error)
+    console.error('Failed to load recipes or grocery list:', error)
   } finally {
     state.loading = false
+  }
+}
+
+async function loadGroceryList() {
+  try {
+    const lists = await fetchGroceryLists()
+    if (lists && lists.length) {
+      const current = lists[0]
+      state.groceryListId = current.id
+      state.groceryItems = (current.items || []).map((item) => ({
+        id: state.nextGroceryId++,
+        name: item.name || '',
+        amount: item.quantity != null ? String(item.quantity) : '',
+        unit: item.unit || '',
+        brand: item.brand || '',
+        category: item.category || 'Other',
+        checked: false,
+        suggestedLocation: item.location || '',
+      }))
+    }
+  } catch (error) {
+    console.error('Failed to load saved grocery list:', error)
+  }
+}
+
+async function saveCurrentGroceryList() {
+  const groceryList = {
+    title: 'Grocery List',
+    items: state.groceryItems.map((item) => ({
+      name: item.name,
+      quantity: item.amount ? parseFloat(item.amount) : null,
+      unit: item.unit || '',
+      category: item.category || 'Other',
+      estimated_price: null,
+      notes: item.brand || '',
+    })),
+  }
+
+  try {
+    if (state.groceryListId) {
+      const saved = await updateGroceryList(state.groceryListId, groceryList)
+      if (saved && saved.id) {
+        state.groceryListId = saved.id
+      }
+    } else {
+      const saved = await createGroceryList(groceryList)
+      if (saved && saved.id) {
+        state.groceryListId = saved.id
+      }
+    }
+  } catch (error) {
+    console.error('Failed to save grocery list:', error)
   }
 }
 
@@ -64,26 +118,31 @@ function addGroceryItem({ name, amount, unit, category, brand, suggestedLocation
     checked: false,
     suggestedLocation: suggestedLocation ?? '',
   })
+  saveCurrentGroceryList()
 }
 
 function updateGroceryItem(id, patch) {
   const item = state.groceryItems.find((i) => i.id === id)
   if (!item) return
   Object.assign(item, patch)
+  saveCurrentGroceryList()
 }
 
 function toggleGroceryItemChecked(id) {
   const item = state.groceryItems.find((i) => i.id === id)
   if (!item) return
   item.checked = !item.checked
+  saveCurrentGroceryList()
 }
 
 function deleteGroceryItem(id) {
   state.groceryItems = state.groceryItems.filter(item => item.id !== id)
+  saveCurrentGroceryList()
 }
 
 function clearGroceryItems() {
   state.groceryItems = []
+  saveCurrentGroceryList()
 }
 
 // ─────────────────────────────────────────────

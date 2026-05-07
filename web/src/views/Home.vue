@@ -165,9 +165,9 @@ export default {
 
     const checklist = computed(() => getPasswordChecklist(signupPassword.value))
 
-    function onLogin() {
+    async function onLogin() {
       error.value = null
-      const result = authStore.login({
+      const result = await authStore.login({
         usernameOrEmail: loginIdentity.value,
         password: loginPassword.value
       })
@@ -178,9 +178,9 @@ export default {
       }
     }
 
-    function onSignUp() {
+    async function onSignUp() {
       error.value = null
-      const result = authStore.signUp({
+      const result = await authStore.signUp({
         username: signupUsername.value,
         email: signupEmail.value,
         password: signupPassword.value,

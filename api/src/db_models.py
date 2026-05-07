@@ -23,8 +23,10 @@ class DBUser(Base):
     last_login = Column(DateTime, nullable=True)
     
     # Relationships (ready for future use when connecting users to recipes/lists)
-    # recipes = relationship("DBRecipe", back_populates="user")
-    # grocery_lists = relationship("DBGroceryList", back_populates="user")
+    recipes = relationship("DBRecipe", back_populates="user", cascade="all, delete-orphan")
+    grocery_lists = relationship("DBGroceryList", back_populates="user", cascade="all, delete-orphan")
+    pantry_items = relationship("DBPantryItem", back_populates="user", cascade="all, delete-orphan")
+    meal_plans = relationship("DBMealPlan", back_populates="user", cascade="all, delete-orphan")
 
 
 class DBRecipe(Base):
@@ -57,6 +59,10 @@ class DBRecipe(Base):
 
     # If True, recipe was auto-generated for a meal plan and is not shown in the saved recipes collection
     from_meal_plan = Column(Boolean, default=False, nullable=False)
+
+    # Link to owner
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("DBUser", back_populates="recipes")
 
     # Relationships
     ingredients = relationship("DBRecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
@@ -108,6 +114,10 @@ class DBPantryItem(Base):
     category = Column(String, nullable=False, default='Other')
     added_at = Column(String, nullable=True)
 
+    # Owner
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("DBUser", back_populates="pantry_items")
+
 
 class DBGroceryList(Base):
     """Database model for storing grocery lists"""
@@ -127,6 +137,10 @@ class DBGroceryList(Base):
     
     # Relationship
     items = relationship("DBGroceryItem", back_populates="grocery_list", cascade="all, delete-orphan")
+
+    # Owner
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("DBUser", back_populates="grocery_lists")
 
 
 class DBGroceryItem(Base):
@@ -158,6 +172,10 @@ class DBMealPlan(Base):
     servings = Column(Integer, nullable=False, default=2)
     created_at = Column(DateTime, default=datetime.utcnow)
     meals = relationship("DBPlannedMeal", back_populates="meal_plan", cascade="all, delete-orphan")
+
+    # Owner
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("DBUser", back_populates="meal_plans")
 
 
 class DBPlannedMeal(Base):

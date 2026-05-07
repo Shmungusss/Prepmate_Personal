@@ -1,4 +1,5 @@
 import { reactive, readonly, watch } from 'vue'
+import { registerUser, loginUser } from '@/services/api'
 
 const AUTH_KEY = 'prepMateAuth'
 const USERS_KEY = 'prepMateUsers'
@@ -54,31 +55,30 @@ function isAuthenticated() {
   return state.currentUser !== null && state.currentUser !== undefined
 }
 
-function login(credentials) {
+async function login(credentials) {
   const { usernameOrEmail, password } = credentials
   if (!usernameOrEmail?.trim() || !password) {
     return { success: false, error: 'Please enter username/email and password.' }
   }
-  const users = loadUsers()
-  const user = users.find(
-    (u) =>
-      (u.username.toLowerCase() === usernameOrEmail.trim().toLowerCase() ||
-        u.email.toLowerCase() === usernameOrEmail.trim().toLowerCase()) &&
-      u.password === password
-  )
-  if (!user) {
-    return { success: false, error: 'Invalid username/email or password.' }
+  try {
+    const response = await loginUser({ username_or_email: usernameOrEmail.trim(), password })
+    if (!response?.success) {
+      return { success: false, error: response?.error || 'Invalid username/email or password.' }
+    }
+    const user = response.user
+    state.currentUser = {
+      type: 'user',
+      id: user.id,
+      username: user.username,
+      email: user.email
+    }
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error.message || 'Login failed' }
   }
-  state.currentUser = {
-    type: 'user',
-    id: user.id,
-    username: user.username,
-    email: user.email
-  }
-  return { success: true }
 }
 
-function signUp(userData) {
+async function signUp(userData) {
   const { username, email, password, confirmPassword } = userData
   if (!username?.trim()) return { success: false, error: 'Username is required.' }
   if (!email?.trim()) return { success: false, error: 'Email is required.' }
@@ -89,33 +89,18 @@ function signUp(userData) {
   const err = validatePassword(password)
   if (err) return { success: false, error: err }
 
-  const users = loadUsers()
-  if (users.some((u) => u.username.toLowerCase() === username.trim().toLowerCase())) {
-    return { success: false, error: 'Username is already taken.' }
+  try {
+    const response = await registerUser({ username: username.trim(), email: email.trim().toLowerCase(), password })
+    state.currentUser = {
+      type: 'user',
+      id: response.id,
+      username: response.username,
+      email: response.email
+    }
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error.message || 'Registration failed' }
   }
-  if (users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
-    return { success: false, error: 'Email is already registered.' }
-  }
-
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2)
-  const newUser = {
-    id,
-    username: username.trim(),
-    email: email.trim().toLowerCase(),
-    password,
-    savedRecipes: [],
-    groceryItems: [],
-    nextIds: { recipe: 1, groceryItem: 1 }
-  }
-  users.push(newUser)
-  saveUsers(users)
-  state.currentUser = {
-    type: 'user',
-    id: newUser.id,
-    username: newUser.username,
-    email: newUser.email
-  }
-  return { success: true }
 }
 
 function validatePassword(password) {

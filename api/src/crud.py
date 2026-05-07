@@ -5,7 +5,7 @@ from schemas import PantryItemCreate, PantryItemUpdate
 import json
 
 
-def save_recipe_to_db(db: Session, recipe: Recipe, from_meal_plan: bool = False) -> DBRecipe:
+def save_recipe_to_db(db: Session, recipe: Recipe, from_meal_plan: bool = False, user_id: int | None = None) -> DBRecipe:
     """Save a Pydantic Recipe model to the database"""
 
     # Create the main recipe record
@@ -24,6 +24,8 @@ def save_recipe_to_db(db: Session, recipe: Recipe, from_meal_plan: bool = False)
         notes=recipe.notes,
         from_meal_plan=from_meal_plan,
     )
+    if user_id is not None:
+        db_recipe.user_id = user_id
     
     db.add(db_recipe)
     db.flush()  # Get the recipe ID before adding related items
@@ -57,7 +59,7 @@ def save_recipe_to_db(db: Session, recipe: Recipe, from_meal_plan: bool = False)
     return db_recipe
 
 
-def save_grocery_list_to_db(db: Session, grocery_list: GroceryList) -> DBGroceryList:
+def save_grocery_list_to_db(db: Session, grocery_list: GroceryList, user_id: int | None = None) -> DBGroceryList:
     """Save a Pydantic GroceryList model to the database"""
     
     # Create the main grocery list record
@@ -68,6 +70,8 @@ def save_grocery_list_to_db(db: Session, grocery_list: GroceryList) -> DBGrocery
         serves=grocery_list.serves,
         notes=grocery_list.notes
     )
+    if user_id is not None:
+        db_grocery_list.user_id = user_id
     
     db.add(db_grocery_list)
     db.flush()  # Get the grocery list ID
@@ -77,9 +81,9 @@ def save_grocery_list_to_db(db: Session, grocery_list: GroceryList) -> DBGrocery
         db_item = DBGroceryItem(
             grocery_list_id=db_grocery_list.id,
             name=item.name,
-            quantity=item.quantity,
-            unit=item.unit,
-            category=item.category.value,
+            quantity=item.quantity if item.quantity is not None else 0.0,
+            unit=item.unit or '',
+            category=item.category if isinstance(item.category, str) else (item.category.value if hasattr(item.category, 'value') else 'Other'),
             estimated_price=item.estimated_price,
             notes=item.notes
         )
@@ -91,9 +95,44 @@ def save_grocery_list_to_db(db: Session, grocery_list: GroceryList) -> DBGrocery
     return db_grocery_list
 
 
-def get_all_recipes(db: Session):
+def update_grocery_list(db: Session, list_id: int, grocery_list: GroceryList, user_id: int | None = None) -> DBGroceryList | None:
+    """Update an existing grocery list and its items"""
+    db_grocery_list = get_grocery_list_by_id(db, list_id, user_id=user_id)
+    if not db_grocery_list:
+        return None
+
+    db_grocery_list.title = grocery_list.title
+    db_grocery_list.total_estimated_cost = grocery_list.total_estimated_cost
+    db_grocery_list.dietary_preferences = json.dumps(grocery_list.dietary_preferences) if grocery_list.dietary_preferences else None
+    db_grocery_list.serves = grocery_list.serves
+    db_grocery_list.notes = grocery_list.notes
+    if user_id is not None:
+        db_grocery_list.user_id = user_id
+
+    db.query(DBGroceryItem).filter(DBGroceryItem.grocery_list_id == db_grocery_list.id).delete()
+    for item in grocery_list.items:
+        db_item = DBGroceryItem(
+            grocery_list_id=db_grocery_list.id,
+            name=item.name,
+            quantity=item.quantity if item.quantity is not None else 0.0,
+            unit=item.unit or '',
+            category=item.category if isinstance(item.category, str) else (item.category.value if hasattr(item.category, 'value') else 'Other'),
+            estimated_price=item.estimated_price,
+            notes=item.notes
+        )
+        db.add(db_item)
+
+    db.commit()
+    db.refresh(db_grocery_list)
+    return db_grocery_list
+
+
+def get_all_recipes(db: Session, user_id: int | None = None):
     """Retrieve all user-saved recipes (excludes meal-plan-only recipes)"""
-    return db.query(DBRecipe).filter(DBRecipe.from_meal_plan == False).all()
+    q = db.query(DBRecipe).filter(DBRecipe.from_meal_plan == False)
+    if user_id is not None:
+        q = q.filter(DBRecipe.user_id == user_id)
+    return q.all()
 
 
 def promote_recipe_to_collection(db: Session, recipe_id: int) -> DBRecipe | None:
@@ -112,14 +151,20 @@ def get_recipe_by_id(db: Session, recipe_id: int):
     return db.query(DBRecipe).filter(DBRecipe.id == recipe_id).first()
 
 
-def get_all_grocery_lists(db: Session):
+def get_all_grocery_lists(db: Session, user_id: int | None = None):
     """Retrieve all grocery lists from database"""
-    return db.query(DBGroceryList).all()
+    q = db.query(DBGroceryList)
+    if user_id is not None:
+        q = q.filter(DBGroceryList.user_id == user_id)
+    return q.all()
 
 
-def get_grocery_list_by_id(db: Session, list_id: int):
+def get_grocery_list_by_id(db: Session, list_id: int, user_id: int | None = None):
     """Retrieve a single grocery list by ID"""
-    return db.query(DBGroceryList).filter(DBGroceryList.id == list_id).first()
+    q = db.query(DBGroceryList).filter(DBGroceryList.id == list_id)
+    if user_id is not None:
+        q = q.filter(DBGroceryList.user_id == user_id)
+    return q.first()
 
 
 def delete_recipe(db: Session, recipe_id: int) -> bool:
@@ -133,18 +178,29 @@ def delete_recipe(db: Session, recipe_id: int) -> bool:
 
 
 # ── Pantry ────────────────────────────────────────────
-def get_all_pantry_items(db: Session):
-    return db.query(DBPantryItem).order_by(DBPantryItem.id).all()
+def get_all_pantry_items(db: Session, user_id: int | None = None):
+    q = db.query(DBPantryItem).order_by(DBPantryItem.id)
+    if user_id is not None:
+        q = q.filter(DBPantryItem.user_id == user_id)
+    return q.all()
 
-def create_pantry_item(db: Session, item: PantryItemCreate) -> DBPantryItem:
-    db_item = DBPantryItem(**item.model_dump())
+def create_pantry_item(db: Session, item: PantryItemCreate, user_id: int | None = None) -> DBPantryItem:
+    data = item.model_dump()
+    if user_id is not None:
+        data["user_id"] = user_id
+    db_item = DBPantryItem(**data)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     return db_item
 
-def bulk_create_pantry_items(db: Session, items: list[PantryItemCreate]) -> list[DBPantryItem]:
-    db_items = [DBPantryItem(**item.model_dump()) for item in items]
+def bulk_create_pantry_items(db: Session, items: list[PantryItemCreate], user_id: int | None = None) -> list[DBPantryItem]:
+    db_items = []
+    for item in items:
+        data = item.model_dump()
+        if user_id is not None:
+            data["user_id"] = user_id
+        db_items.append(DBPantryItem(**data))
     db.add_all(db_items)
     db.commit()
     for i in db_items:
@@ -182,7 +238,7 @@ def delete_grocery_list(db: Session, list_id: int) -> bool:
 
 # ── Meal Plan CRUD ─────────────────────────────────────
 
-def save_meal_plan(db: Session, plan_data):
+def save_meal_plan(db: Session, plan_data, user_id: int | None = None):
     """Save a meal plan and its planned meals to the database"""
     db_plan = DBMealPlan(
         name=plan_data.name,
@@ -190,6 +246,8 @@ def save_meal_plan(db: Session, plan_data):
         end_date=plan_data.end_date,
         servings=plan_data.servings,
     )
+    if user_id is not None:
+        db_plan.user_id = user_id
     db.add(db_plan)
     db.flush()
     for meal in plan_data.meals:
@@ -204,12 +262,18 @@ def save_meal_plan(db: Session, plan_data):
     return db_plan
 
 
-def get_all_meal_plans(db: Session):
-    return db.query(DBMealPlan).order_by(DBMealPlan.created_at.desc()).all()
+def get_all_meal_plans(db: Session, user_id: int | None = None):
+    q = db.query(DBMealPlan).order_by(DBMealPlan.created_at.desc())
+    if user_id is not None:
+        q = q.filter(DBMealPlan.user_id == user_id)
+    return q.all()
 
 
-def get_meal_plan_by_id(db: Session, plan_id: int):
-    return db.query(DBMealPlan).filter(DBMealPlan.id == plan_id).first()
+def get_meal_plan_by_id(db: Session, plan_id: int, user_id: int | None = None):
+    q = db.query(DBMealPlan).filter(DBMealPlan.id == plan_id)
+    if user_id is not None:
+        q = q.filter(DBMealPlan.user_id == user_id)
+    return q.first()
 
 
 def delete_meal_plan(db: Session, plan_id: int) -> bool:

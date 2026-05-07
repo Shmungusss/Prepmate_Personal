@@ -165,3 +165,8 @@ class UserCreateRequest(BaseModel):
     email: str
     username: str
     password: str
+
+class UserLoginRequest(BaseModel):
+    email: Optional[str] = None
+    username_or_email: Optional[str] = None
+    password: str

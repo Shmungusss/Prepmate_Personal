@@ -1,4 +1,22 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const AUTH_STORAGE_KEY = 'prepMateAuth'
+
+function getAuthHeaders() {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY)
+    if (!raw) return {}
+    const auth = JSON.parse(raw)
+    if (!auth?.id) return {}
+    return { 'X-User-Id': String(auth.id) }
+  } catch {
+    return {}
+  }
+}
+
+function jsonHeaders() {
+  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
+}
 
 /**
  * Calls the root endpoint to verify backend connection
@@ -120,7 +138,7 @@ export async function extractRecipeFromImage(file) {
   const formData = new FormData()
   formData.append('image', file)
 
-  const response = await fetch(`${API_BASE_URL}/recipe/generate/from-image`, {
+  const response = await fetch(`${API_BASE_URL}/api/recipes/from-image`, {
     method: 'POST',
     body: formData
   })
@@ -163,15 +181,77 @@ export async function extractRecipeFromText(text) {
 export async function fetchAllRecipes() {
   const response = await fetch(`${API_BASE_URL}/recipes`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
+    headers: getAuthHeaders(),
   })
-  console.log(response)
   if (!response.ok) {
     throw new Error(`Failed to fetch recipes: ${response.status}`)
   }
-  
   return await response.json()
 }
+
+export async function registerUser(userData) {
+  const response = await fetch(`${API_BASE_URL}/users/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData)
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => null)
+    throw new Error(err?.error?.message || err?.detail || `Failed to register user: ${response.status}`)
+  }
+  return await response.json()
+}
+
+export async function loginUser(credentials) {
+  const response = await fetch(`${API_BASE_URL}/users/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials)
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => null)
+    throw new Error(err?.error?.message || err?.detail || `Failed to login: ${response.status}`)
+  }
+  return await response.json()
+}
+
+export async function fetchGroceryLists() {
+  const response = await fetch(`${API_BASE_URL}/grocery-lists`, {
+    method: 'GET',
+    headers: getAuthHeaders(),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to fetch grocery lists: ${response.status}`)
+  }
+  return await response.json()
+}
+
+export async function createGroceryList(groceryList) {
+  const response = await fetch(`${API_BASE_URL}/grocery-lists`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify(groceryList),
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => null)
+    throw new Error(err?.detail || `Failed to create grocery list: ${response.status}`)
+  }
+  return await response.json()
+}
+
+export async function updateGroceryList(listId, groceryList) {
+  const response = await fetch(`${API_BASE_URL}/grocery-lists/${listId}`, {
+    method: 'PUT',
+    headers: jsonHeaders(),
+    body: JSON.stringify(groceryList),
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => null)
+    throw new Error(err?.detail || `Failed to update grocery list: ${response.status}`)
+  }
+  return await response.json()
+}
+
 /**
  * Delete a recipe by ID
  */
@@ -206,7 +286,10 @@ export async function getRecipe(id) {
 // ── Pantry API ────────────────────────────────────────
 
 export async function fetchPantryItems() {
-  const res = await fetch(`${API_BASE_URL}/pantry/items`)
+  const res = await fetch(`${API_BASE_URL}/pantry/items`, {
+    method: 'GET',
+    headers: getAuthHeaders(),
+  })
   if (!res.ok) throw new Error(`Failed to fetch pantry: ${res.status}`)
   return res.json()
 }
@@ -214,7 +297,7 @@ export async function fetchPantryItems() {
 export async function createPantryItem(item) {
   const res = await fetch(`${API_BASE_URL}/pantry/items`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(item),
   })
   if (!res.ok) throw new Error(`Failed to create pantry item: ${res.status}`)
@@ -224,7 +307,7 @@ export async function createPantryItem(item) {
 export async function bulkCreatePantryItems(items) {
   const res = await fetch(`${API_BASE_URL}/pantry/items/bulk`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ items }),
   })
   if (!res.ok) throw new Error(`Failed to bulk create pantry items: ${res.status}`)
@@ -234,7 +317,7 @@ export async function bulkCreatePantryItems(items) {
 export async function updatePantryItem(id, patch) {
   const res = await fetch(`${API_BASE_URL}/pantry/items/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(patch),
   })
   if (!res.ok) throw new Error(`Failed to update pantry item: ${res.status}`)
@@ -275,6 +358,7 @@ export async function scanReceipt(file) {
 
   const response = await fetch(`${API_BASE_URL}/pantry/scan-receipt`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body: formData,
   })
 
@@ -292,7 +376,7 @@ export async function scanReceipt(file) {
 export async function generateMealPlanDay(request) {
   const res = await fetch(`${API_BASE_URL}/meal-plans/generate/day`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(request),
   })
   if (!res.ok) {
@@ -305,7 +389,7 @@ export async function generateMealPlanDay(request) {
 export async function saveMealPlan(plan) {
   const res = await fetch(`${API_BASE_URL}/meal-plans`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(plan),
   })
   if (!res.ok) throw new Error(`Failed to save meal plan: ${res.status}`)
@@ -313,26 +397,35 @@ export async function saveMealPlan(plan) {
 }
 
 export async function fetchMealPlans() {
-  const res = await fetch(`${API_BASE_URL}/meal-plans`)
+  const res = await fetch(`${API_BASE_URL}/meal-plans`, {
+    method: 'GET',
+    headers: getAuthHeaders(),
+  })
   if (!res.ok) throw new Error(`Failed to fetch meal plans: ${res.status}`)
   return res.json()
 }
 
 export async function fetchMealPlan(id) {
-  const res = await fetch(`${API_BASE_URL}/meal-plans/${id}`)
+  const res = await fetch(`${API_BASE_URL}/meal-plans/${id}`, {
+    method: 'GET',
+    headers: getAuthHeaders(),
+  })
   if (!res.ok) throw new Error(`Failed to fetch meal plan: ${res.status}`)
   return res.json()
 }
 
 export async function deleteMealPlan(id) {
-  const res = await fetch(`${API_BASE_URL}/meal-plans/${id}`, { method: 'DELETE' })
+  const res = await fetch(`${API_BASE_URL}/meal-plans/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  })
   if (!res.ok) throw new Error(`Failed to delete meal plan: ${res.status}`)
 }
 
 export async function updatePlannedMeal(planId, date, mealType, recipeId) {
   const res = await fetch(`${API_BASE_URL}/meal-plans/${planId}/meals`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify({ date, meal_type: mealType, recipe_id: recipeId }),
   })
   if (!res.ok) throw new Error(`Failed to update planned meal: ${res.status}`)
@@ -347,7 +440,7 @@ export async function updatePlannedMeal(planId, date, mealType, recipeId) {
 export async function saveRecipe(recipe) {
   const response = await fetch(`${API_BASE_URL}/recipes/save`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(recipe)
   })
   
@@ -361,7 +454,7 @@ export async function saveRecipe(recipe) {
 export async function saveRecipeToCollection(recipeId) {
   const response = await fetch(`${API_BASE_URL}/recipes/${recipeId}/save-to-collection`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
   })
   if (!response.ok) {
     throw new Error(`Failed to save recipe to collection: ${response.status}`)

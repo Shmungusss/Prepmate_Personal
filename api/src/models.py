@@ -113,9 +113,9 @@ class GroceryCategory(str, Enum):
 class GroceryItem(BaseModel):
     """Individual grocery item"""
     name: str = Field(..., description="Name of the grocery item")
-    quantity: float = Field(..., description="Quantity needed", gt=0)
-    unit: str = Field(..., description="Unit of measurement (e.g., lbs, oz, cups, count, bunch)")
-    category: GroceryCategory = Field(..., description="Category of the item for organization")
+    quantity: Optional[float] = Field(None, description="Quantity needed", ge=0)
+    unit: Optional[str] = Field(None, description="Unit of measurement (e.g., lbs, oz, cups, count, bunch)")
+    category: Optional[str] = Field(None, description="Category of the item for organization")
     estimated_price: Optional[float] = Field(None, description="Estimated price in dollars", ge=0)
     notes: Optional[str] = Field(None, description="Additional notes (e.g., 'organic', 'fresh', 'brand preference')")
 
